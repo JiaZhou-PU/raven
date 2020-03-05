@@ -24,6 +24,7 @@ import numpy as np
 import time
 import itertools
 from collections import OrderedDict
+import pandas as pd
 #External Modules End--------------------------------------------------------------------------------
 
 #Internal Modules------------------------------------------------------------------------------------
@@ -673,6 +674,11 @@ class EnsembleModel(Dummy):
           dataSet = inRunTargetEvaluations[modelIn].realization(index=iterationCount-1,unpackXArray=True)
           ##FIXME: the following dict construction is a temporary solution since the realization method returns scalars if we have a PointSet
           dataSet = {key:np.atleast_1d(dataSet[key]) for key in dataSet}
+          # FIXME if Speed in dataset
+          if 'Speed' in dataSet.keys():
+            print('Jialock TE',np.shape(dataSet['Speed']))
+            df = pd.DataFrame.from_dict(dataSet['Speed'])
+            df.to_csv("data.csv")
           responseSpace         = dataSet
           typeOutputs[modelCnt] = inRunTargetEvaluations[modelIn].type
           gotOutputs[modelCnt]  = {key: dataSet[key] for key in inRunTargetEvaluations[modelIn].getVars("output") + inRunTargetEvaluations[modelIn].getVars("indexes")}

@@ -23,6 +23,7 @@ import copy
 import warnings
 from collections import defaultdict, OrderedDict
 import pprint
+import pandas as pd
 
 # external libraries
 import abc
@@ -267,6 +268,9 @@ class Segments(Collection):
       picker = slice(delim[0], delim[-1] + 1)
       result = segment.finalizeLocalRomSegmentEvaluation(self._romGlobalAdjustments, result, picker)
     result = self._templateROM.finalizeGlobalRomSegmentEvaluation(self._romGlobalAdjustments, result)
+    print('Jialock Seg results',np.shape(result['Speed']))
+    dfr = pd.DataFrame.from_dict(result['Speed'])
+    dfr.to_csv("datar.csv")
     return result
 
   def writePointwiseData(self, writeTo):
