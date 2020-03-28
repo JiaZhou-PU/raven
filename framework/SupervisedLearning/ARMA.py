@@ -1205,10 +1205,25 @@ class ARMA(supervisedLearning):
       @ In, weights, np.array(float), weighting for samples (assumed uniform if not given)
       @ Out, new, np.array, new signal after transformation
     """
+    if np.isnan(signal.any()):
+      print('jialock find a nanbbbbb')
+      print(np.argwhere(np.isnan(signal)))
     # first build a histogram object of the sampled data
     dist, hist = mathUtils.trainEmpiricalFunction(signal, minBins=self._minBins, weights=weights)
+    # print('jialock hist',dist,hist)
     # transform data through CDFs
+    if np.isnan(signal.any()):
+      print('jialock find a nandddd')
+      print(np.argwhere(np.isnan(signal)))
+
     new = originalDist[0].ppf(dist.cdf(signal))
+    if np.isnan(new.any()):
+      print('jialock find a nancccccc')
+      print()
+      print(np.argwhere(np.isnan(new)))
+    # else:
+    #   print('new is notnan')
+
     return new
 
   def _combineMask(self,masks):
@@ -2050,8 +2065,31 @@ class ARMA(supervisedLearning):
     """
     # backtransform signal to preserve CDF
     ## how nicely does this play with zerofiltering?
+    # if 'Speed' in evaluation.keys():
+    #   print('before finalizeGlobalRomSegmentEvaluation')
+    #   if np.isnan(evaluation['Speed']).any():
+    #     print('jialock find a nan444')
+    #     print(np.argwhere(np.isnan(evaluation['Speed']))) #no nan
+
     evaluation = self._finalizeGlobalRSE_preserveCDF(settings, evaluation, weights)
+
+    if 'Speed' in evaluation.keys():
+      print('after _finalizeGlobalRSE_preserveCDF')
+      if np.isnan(evaluation['Speed']).any():
+        print('jialock find a nan333')
+        print(np.argwhere(np.isnan(evaluation['Speed'])))
+
+
+
+
     evaluation = self._finalizeGlobalRSE_zeroFilter(settings, evaluation, weights)
+
+    # if 'Speed' in evaluation.keys():
+    #   print('after _finalizeGlobalRSE_zeroFilter')
+    #   if np.isnan(evaluation['Speed']).any():
+    #     print('jialock find a nan5555')
+    #     print(np.argwhere(np.isnan(evaluation['Speed'])))
+
     return evaluation
 
   def _finalizeGlobalRSE_preserveCDF(self, settings, evaluation, weights):
@@ -2065,6 +2103,13 @@ class ARMA(supervisedLearning):
       @ Out, evaluation, dict, {target: np.ndarray} adjusted global evaluation
     """
     # TODO FIXME
+    # if 'Speed' in evaluation.keys():
+    #   print('before preserveInputCDF')
+    #   bbbbb =  evaluation['Speed']
+    #   print('bshape',bbbbb.shape)
+    #   print('bbbbf',bbbbb[:,0:3]) #no nan
+
+
     import scipy.stats as stats
     if self.preserveInputCDF:
       for target, dist in settings['input CDFs'].items():
@@ -2072,6 +2117,7 @@ class ARMA(supervisedLearning):
           cycles = range(len(evaluation[target]))
           scaling = self._evaluateScales(self.growthFactors[target], cycles)
           # multicycle option
+          # print('multi cycle bbbbf3',bbbbb.shape,target,bbbbb[:,0:3])
           for y in range(len(evaluation[target])):
             scale = scaling[y]
             if scale != 1:
@@ -2082,7 +2128,30 @@ class ARMA(supervisedLearning):
               newDist = tuple([newObject, histDist])
               evaluation[target][y] = self._transformThroughInputCDF(evaluation[target][y], newDist, weights)
             else:
+              # print('bbbbf4',bbbbb[0,0:3])
+              if target =='Speed':
+                # print('there is speed',bbbbb.shape,bbbbb[:,0:3])
+                # if np.isnan(evaluation['Speed'][y]).any():
+                #   print('bbbbf9',bbbbb[0,0:3])
+                #   print('jialock find a nan999')
+                aaaa = evaluation[target][y]
+                # print('ashape',aaaa.shape)
+                print('aaaabfmin max locate and value',y,np.argmax(aaaa),np.amax(aaaa),np.argmin(aaaa),np.amin(aaaa))
+              # print('bbbbf6',bbbbb.shape,np.isnan(bbbbb[y]).any())
               evaluation[target][y] = self._transformThroughInputCDF(evaluation[target][y], dist, weights)
+              # print('bbbbf7',bbbbb.shape,np.isnan(bbbbb[y]).any()) # change value from 6
+              if target =='Speed':
+                # print('bbbbf8',bbbbb[0,0:3])
+                if np.isnan(evaluation['Speed'][y]).any():
+                  print('jialock find a nan888')
+                  whenan = np.argwhere(np.isnan(evaluation['Speed'][y]))[0][0]
+                  print(whenan,y)
+                  # print(bbbbb[y][whenan-2:whenan+3])
+                  print(aaaa[whenan-2:whenan+3])
+                  print(self.seed,dist, weights)
+                  # print(evaluation['Speed'][y][whenan-2:whenan+3])
+                  # print('b after',bbbbb[:,0:3])
+                  # print('a after',aaaa)
         else:
           evaluation[target] = self._transformThroughInputCDF(evaluation[target], dist, weights)
     return evaluation

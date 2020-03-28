@@ -262,13 +262,41 @@ class Segments(Collection):
       @ Out, result, np.array, evaluated points
     """
     result = self._evaluateBySegments(edict)
+    if 'Speed' in result.keys():
+      print('jialock begining',result['Speed'].shape,np.isnan(result['Speed']).any()) #this print same
+      dfr = pd.DataFrame.from_dict(result['Speed'])
+      dfr.to_csv("speed_beforesegment.csv")
+      if np.isnan(result['Speed']).any():
+        print('jialock find a nan000')
     # allow each segment ROM to modify signal based on global training settings
     for s, segment in enumerate(self._getSequentialRoms()):
       delim = self._divisionInfo['delimiters'][s]
       picker = slice(delim[0], delim[-1] + 1)
+
       result = segment.finalizeLocalRomSegmentEvaluation(self._romGlobalAdjustments, result, picker)
+      if 'Speed' in result.keys():
+        if np.isnan(result['Speed']).any():
+          print('picker',picker)
+
+
+    if 'Speed' in result.keys():
+      print('jialock aftering',result['Speed'].shape,np.isnan(result['Speed']).any()) #this print
+      dfr = pd.DataFrame.from_dict(result['Speed'])
+      dfr.to_csv("speed_aftersegment.csv")
+      if np.isnan(result['Speed']).any():
+        print('jialock find a nan222')
+      # if np.isnan(result['Speed']).any():
+      #   print('picker2',picker)
+
     result = self._templateROM.finalizeGlobalRomSegmentEvaluation(self._romGlobalAdjustments, result)
-    print('Jialock Seg results',np.shape(result['Speed']))
+    print('Jialock Seg results',np.shape(result['Speed']),np.isnan(result['Speed']).any())
+    if 'Speed' in result.keys():
+      if np.isnan(result['Speed']).any():
+        print('jialock find a nan111')
+        # print(np.argwhere(np.isnan(result['Speed'])))
+
+
+
     dfr = pd.DataFrame.from_dict(result['Speed'])
     dfr.to_csv("datar.csv")
     return result

@@ -550,11 +550,11 @@ class EnsembleModel(Dummy):
 
   def _externalRun(self,inRun, jobHandler):
     """
-      Method that performs the actual run of the essembled model (separated from run method for parallelization purposes)
+      Method that performs the actual run of the ensembled model (separated from run method for parallelization purposes)
       @ In, inRun, tuple, tuple of Inputs, e.g. inRun[0]: actual dictionary of input, inRun[1]: string,
         the type of Sampler or Optimizer, inRun[2], dict, contains the information from the Sampler
       @ In, jobHandler, object, instance of jobHandler
-      @ Out, returnEvaluation, tuple, the results of the essembled model:
+      @ Out, returnEvaluation, tuple, the results of the ensembled model:
                                - returnEvaluation[0] dict of results from each sub-model,
                                - returnEvaluation[1] the dataObjects where the projection of each model is stored
                                - returnEvaluation[2] dict used to store the optional outputs
@@ -565,7 +565,6 @@ class EnsembleModel(Dummy):
     identifier = inputKwargs.pop('prefix')
     tempOutputs = {}
     inRunTargetEvaluations = {}
-
     for modelIn in self.orderList:
       # reset the DataObject for the projection
       self.localTargetEvaluations[modelIn].reset()
@@ -664,21 +663,34 @@ class EnsembleModel(Dummy):
             self.raiseAnError(RuntimeError,"The Model  " + modelIn + " identified by " + finishedRun[0].identifier +" failed!")
           # store the output dictionary
           tempOutputs[modelIn] = copy.deepcopy(evaluation)
+          # if 'Speed' in tempOutputs[modelIn].keys():
+          #   print('Jialock target',np.shape(tempOutputs[modelIn]['Speed']))
+          #   df = pd.DataFrame.from_dict(tempOutputs[modelIn]['Speed'])
+          #   df.to_csv("data_tout.csv")
           # collect the target evaluation
           #if modelIn not in modelsOnHold:
           self.modelsDictionary[modelIn]['Instance'].collectOutput(finishedRun[0],inRunTargetEvaluations[modelIn])
+
+          # # inRunTargetEvaluations[modelIn].write('lll.csv',style='csv')
+
+          # # print('Jialock inrunTE',inRunTargetEvaluations[modelIn],self.modelsDictionary[modelIn]['Instance'])
           ## FIXME: The call asDataset() is unuseful here. It must be done because otherwise the realization(...) method from collector
           ## does not return the indexes values (TO FIX)
           inRunTargetEvaluations[modelIn].asDataset()
+          # inRunTargetEvaluations[modelIn].write('lll2.csv',style='csv')
+
           # get realization
+          # dataSet2 = inRunTargetEvaluations[modelIn].realization(index=iterationCount-1,unpackXArray=False)
           dataSet = inRunTargetEvaluations[modelIn].realization(index=iterationCount-1,unpackXArray=True)
+          if 'Speed' in dataSet:
+            print('jialock dataset shape',dataSet['Speed'].shape)
           ##FIXME: the following dict construction is a temporary solution since the realization method returns scalars if we have a PointSet
           dataSet = {key:np.atleast_1d(dataSet[key]) for key in dataSet}
           # FIXME if Speed in dataset
           if 'Speed' in dataSet.keys():
-            print('Jialock TE',np.shape(dataSet['Speed']))
+            print('Jialock TE 1 and 2',np.shape(dataSet['Speed']))
             df = pd.DataFrame.from_dict(dataSet['Speed'])
-            df.to_csv("data.csv")
+            df.to_csv("dataafter.csv")
           responseSpace         = dataSet
           typeOutputs[modelCnt] = inRunTargetEvaluations[modelIn].type
           gotOutputs[modelCnt]  = {key: dataSet[key] for key in inRunTargetEvaluations[modelIn].getVars("output") + inRunTargetEvaluations[modelIn].getVars("indexes")}

@@ -521,23 +521,36 @@ class DataSet(DataObject):
       self.raiseAnError(TypeError,'Either "index" OR "matchDict" (not both) must be specified to use "realization!"')
     numInData = len(self._data[self.sampleTag]) if self._data is not None else 0
     numInCollector = len(self._collector) if self._collector is not None else 0
+    print('jialock in dataset.py numInData, numInCollector',numInData, numInCollector)
     ## next, depends on if we're doing an index lookup or a realization match
     if index is not None:
+      print('indiex is not none')
       # traditional request: nonnegative integers
       if index >= 0:
         ## if index past the data, try the collector
         if index > numInData-1:
+          print('index > numInData-1')
           ## if past the data AND the collector, we don't have that entry
           if index > numInData + numInCollector - 1:
+            print('index > numInData + numInCollector - 1')
             self.raiseAnError(IndexError,'{}: Requested index "{}" but only have {} entries (zero-indexed)!'.format(self.name,index,numInData+numInCollector))
           ## otherwise, take from the collector
           else:
+            print('index < numInData + numInCollector - 1')
             rlz = self._getRealizationFromCollectorByIndex(index - numInData)
         ## otherwise, take from the data
         else:
+          print('index <= numInData-1')
+          print('index,xarray',index, unpackXArray)
+          # print(self._data)
           rlz = self._getRealizationFromDataByIndex(index, unpackXArray)
+          if 'Speed' in rlz.keys():
+            print('jialock rlz speed shape',rlz['Speed'].shape)
+            print('jialock rlz GHI shape',rlz['GHI'].shape)
+
       # handle "-" requests (counting from the end): first end of collector, or if not then end of data
       else:
+        print('index = 0')
         # caller is requesting so many "from the end", so work backwards
         ## if going back further than what's in the collector ...
         if abs(index) > numInCollector:
@@ -556,6 +569,7 @@ class DataSet(DataObject):
     ## END select by index
     ## START collect by matching realization
     else: # matchDict must not be None
+      print('index is none')
       # if nothing in data, try collector
       if numInData == 0:
         # if nothing in data OR collector, we can't have a match
@@ -563,16 +577,20 @@ class DataSet(DataObject):
           return 0, None
         # otherwise, get it from the collector
         else:
+          print('numInCollector is not 0')
           index, rlz = self._getRealizationFromCollectorByValue(matchDict, tol=tol)
       # otherwise, first try to find it in the data
       else:
+        print('numInData is not 0')
         index, rlz = self._getRealizationFromDataByValue(matchDict, tol=tol, unpackXArray=unpackXArray)
         # if no match found in data, try in the collector (if there's anything in it)
         if rlz is None:
+          print('rlz is none')
           if numInCollector > 0:
             index, rlz = self._getRealizationFromCollectorByValue(matchDict, tol=tol)
       # add index map where necessary
       rlz = self._addIndexMapToRlz(rlz)
+      print('rlz',rlz)
       return index, rlz
 
   def remove(self,variable):
@@ -1111,12 +1129,21 @@ class DataSet(DataObject):
     new = {}
     for k,v in rlz.items():
       # if singular, eliminate dataarray container
+      # print(' in _convertFinalizedDataRealizationToDict,k,shapev',k,v.shape)
       if len(v.dims)==0:
+        # print('dim 0',k)
         new[k] = v.item(0)
       # otherwise, trim NaN entries before returning
       else:
         for dim in v.dims:
-          v = v.dropna(dim)
+
+          if np.isnan(v).any():
+            # print(v.shape)
+            # print(k, 'is nan')
+            # print(type(v))
+            # print(np.argwhere(np.isnan(v.values)))
+            v = v.dropna(dim)
+            # print('after drop',v.shape)
           if unpackXarray:
             new[dim] = v.coords[dim].values
         new[k] = v if not unpackXarray else v.values
@@ -1553,7 +1580,11 @@ class DataSet(DataObject):
       @ Out, rlz, dict, realization as {var:value} where value is a DataArray with only coordinate dimensions
     """
     assert(self._data is not None)
+    # print('jislock is in _getRealizationFromDataByIndex')
+    # print('self.sampleTag',self.sampleTag)
+    # print('self._data[{self.sampleTag:index}]',self._data[{self.sampleTag:index}])
     rlz = self._data[{self.sampleTag:index}].drop(self.sampleTag).data_vars
+    # print('lalalalallal')
     rlz = self._convertFinalizedDataRealizationToDict(rlz, unpackXArray)
     return rlz
 
@@ -1792,6 +1823,9 @@ class DataSet(DataObject):
     filenameLocal = fileName # TODO path?
     keep = self._getRequestedElements(kwargs)
     toDrop = list(var for var in self.getVars() if var not in keep)
+    if self._data is None:
+      print('jialocknone')
+      return
     # if printing by cluster, divert now
     if 'clusterLabel' in kwargs:
       clusterLabel = kwargs.pop('clusterLabel')
@@ -1806,8 +1840,8 @@ class DataSet(DataObject):
     else:
       data = self._data
       mode = 'w'
-
-    data = data.drop(toDrop)
+    if toDrop:
+      data = data.drop(toDrop)
     self.raiseADebug('Printing data from "{}" to CSV: "{}"'.format(self.name,filenameLocal+'.csv'))
     # get the list of elements the user requested to write
     # order data according to user specs # TODO might be time-inefficient, allow user to skip?
