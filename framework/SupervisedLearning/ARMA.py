@@ -34,6 +34,7 @@ from scipy import stats
 from sklearn import linear_model
 from scipy.signal import find_peaks
 from scipy.stats import rv_histogram
+import pandas as pd
 #External Modules End--------------------------------------------------------------------------------
 
 #Internal Modules------------------------------------------------------------------------------------
@@ -557,7 +558,7 @@ class ARMA(supervisedLearning):
         # check if we have zero-filtering in play here
         if len(self.varmaResult) > 1:
           # where would the filter be in the index lineup had we included it in the zeroed varma?
-          filterTargetIndex = self.correlations.index(self.zeroFilterTarget)
+          filterTargetIndex = self.correlations.index(self.zeFroFilterTarget)
           # if so, we need to sample both VARMAs
           # have we already taken the correlated sample yet?
           if correlatedSample is None:
@@ -625,6 +626,13 @@ class ARMA(supervisedLearning):
       #returnEvaluation[target+'_0base'] = copy.copy(signal)
       # denoise
       signal = self._denormalizeThroughCDF(signal, self.cdfParams[target])
+      #NOte this is just need to remove
+      # lueluelue = signal
+      # print('signal,signal',signal)
+
+      # locald = {'signalarma':signal}
+      # dfr = pd.DataFrame(data=locald)
+      # dfr.to_csv("signalafterarma.csv")
       # DEBUG adding arbitrary variables
       #returnEvaluation[target+'_1denorm'] = copy.copy(signal)
       #debuggFile.writelines('signal_arma,'+','.join(str(x) for x in signal)+'\n')
@@ -632,6 +640,7 @@ class ARMA(supervisedLearning):
       # Add fourier trends
       if target in self.fourierParams:
         signal += self.fourierResults[target]['predict']
+        # print('signal,after fourier',signal)
         # DEBUG adding arbitrary variables
         #returnEvaluation[target+'_2fourier'] = copy.copy(signal)
         #debuggFile.writelines('signal_fourier,'+','.join(str(x) for x in self.fourierResults[target]['predict'])+'\n')
@@ -669,7 +678,9 @@ class ARMA(supervisedLearning):
       assert(signal.size == returnEvaluation[self.pivotParameterID].size)
       #debuggFile.writelines('final,'+','.join(str(x) for x in signal)+'\n')
       returnEvaluation[target] = signal
+      # print('returnEvaluation',signal )
     # END for target in targets
+    # print('returnEvaluation',returnEvaluation)
     return returnEvaluation
 
   def reseed(self, seed):
@@ -1209,7 +1220,10 @@ class ARMA(supervisedLearning):
       print('jialock find a nanbbbbb')
       print(np.argwhere(np.isnan(signal)))
     # first build a histogram object of the sampled data
+    # print('jialock signal here',signal)
+    print(self._minBins)
     dist, hist = mathUtils.trainEmpiricalFunction(signal, minBins=self._minBins, weights=weights)
+    print('jialock bins',dist, hist)
     # print('jialock hist',dist,hist)
     # transform data through CDFs
     if np.isnan(signal.any()):
@@ -1724,6 +1738,11 @@ class ARMA(supervisedLearning):
     for target, info in paramDict.items():
       # counts
       cs = list(info['counts'].items())
+      if target == 'Speed':
+        print('jialock jzjzjzjzj',cs)
+
+        c_idx, c_vals = zip(*sorted(cs, key=lambda x: x[0]))
+        print(c_idx, c_vals)
       c_idx, c_vals = zip(*sorted(cs, key=lambda x: x[0]))
       c_vals = np.asarray(c_vals)
       ## renormalize counts
@@ -1905,6 +1924,7 @@ class ARMA(supervisedLearning):
       target, metric, ID = key[7:].split('|')
 
       if metric == 'cdf':
+        print(param)
         if ID.startswith('counts_'):
           c = int(ID.split('_')[1])
           if 'counts' not in cdf[target]:
@@ -2072,7 +2092,7 @@ class ARMA(supervisedLearning):
     #     print(np.argwhere(np.isnan(evaluation['Speed']))) #no nan
 
     evaluation = self._finalizeGlobalRSE_preserveCDF(settings, evaluation, weights)
-
+    print('eeee',evaluation)
     if 'Speed' in evaluation.keys():
       print('after _finalizeGlobalRSE_preserveCDF')
       if np.isnan(evaluation['Speed']).any():
@@ -2153,6 +2173,7 @@ class ARMA(supervisedLearning):
                   # print('b after',bbbbb[:,0:3])
                   # print('a after',aaaa)
         else:
+          print(evaluation[target])
           evaluation[target] = self._transformThroughInputCDF(evaluation[target], dist, weights)
     return evaluation
 

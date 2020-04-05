@@ -262,6 +262,7 @@ class Segments(Collection):
       @ Out, result, np.array, evaluated points
     """
     result = self._evaluateBySegments(edict)
+
     if 'Speed' in result.keys():
       print('jialock begining',result['Speed'].shape,np.isnan(result['Speed']).any()) #this print same
       dfr = pd.DataFrame.from_dict(result['Speed'])
@@ -289,7 +290,7 @@ class Segments(Collection):
       #   print('picker2',picker)
 
     result = self._templateROM.finalizeGlobalRomSegmentEvaluation(self._romGlobalAdjustments, result)
-    print('Jialock Seg results',np.shape(result['Speed']),np.isnan(result['Speed']).any())
+    # print('Jialock Seg results',np.shape(result['Speed']),np.isnan(result['Speed']).any())
     if 'Speed' in result.keys():
       if np.isnan(result['Speed']).any():
         print('jialock find a nan111')
@@ -297,8 +298,8 @@ class Segments(Collection):
 
 
 
-    dfr = pd.DataFrame.from_dict(result['Speed'])
-    dfr.to_csv("datar.csv")
+    # dfr = pd.DataFrame.from_dict(result['Speed'])
+    # dfr.to_csv("datar.csv")
     return result
 
   def writePointwiseData(self, writeTo):
@@ -752,6 +753,8 @@ class Clusters(Segments):
       ## for truncated mode, this is trivial.
       ## for clustered mode, this is complicated.
       result = self._templateROM.finalizeGlobalRomSegmentEvaluation(self._romGlobalAdjustments, result, weights=weights)
+      print('in rom collection')
+
     # TODO add clusterWeights to "result" as meta to the output? This would be handy!
     return result
 
