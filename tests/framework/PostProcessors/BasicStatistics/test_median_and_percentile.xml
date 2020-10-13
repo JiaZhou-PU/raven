@@ -27,7 +27,7 @@
     <Dummy name="MyDummy" subType=""/>
     <PostProcessor name="median" subType="BasicStatistics" verbosity="debug">
       <median prefix="median">x0,y0,z0,x01,y01,z02,x,y,z</median>
-      <percentile prefix="percentile">x0,z02</percentile>
+      <percentile prefix="percentile" distribution = 'discretes'>x0,z02</percentile>
       <percentile prefix="percentile2" percent='40'>x0</percentile>
     </PostProcessor>
   </Models>

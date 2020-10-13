@@ -88,6 +88,11 @@ class BasicStatistics(PostProcessor):
         #percent is a string type because otherwise we can't tell 95.0 from 95
         # which matters because the number is used in output.
         scalarSpecification.addParam("percent", InputTypes.StringListType)
+        scalarSpecification.addParam("distribution", InputTypes.StringType)
+      if scalar == 'median':
+        # median will have the discrete option
+        scalarSpecification.addParam("distribution", InputTypes.StringType)
+            
       scalarSpecification.addParam("prefix", InputTypes.StringType)
       inputSpecification.addSub(scalarSpecification)
 
@@ -319,10 +324,39 @@ class BasicStatistics(PostProcessor):
         else:
           reqPercent = set(utils.floatConversion(percent)/100. for percent in child.parameterValues['percent'])
           strPercent = set(percent for percent in child.parameterValues['percent'])
+          print('lalalalala')
+        if 'distribution' not in child.parameterValues:
+          reqDistribution = 'continous'
+          print('Jia JIAJIAJIAJIA',tag,prefix,reqDistribution)
+        else:
+          reqDistribution = child.parameterValues['distribution'].lower()
+          print('ZHOUZHOU JIAJIAJIAJIA',tag,prefix,reqDistribution)
+          if reqDistribution not in ['continous','discrete']:
+            self.raiseAWarning('Unrecognized distribution type for metric percentile, use continous instead')
+            reqDistribution = 'continous'
         self.toDo[tag].append({'targets':set(targets),
                                'prefix':prefix,
                                'percent':reqPercent,
-                               'strPercent':strPercent})
+                               'strPercent':strPercent,
+                               'reqDistribution':reqDistribution})
+        print(self.toDo)
+      if tag == 'median':
+        #get targets
+        targets = set(child.value)
+        if tag not in self.toDo.keys():
+          self.toDo[tag] = [] 
+        if 'distribution' not in child.parameterValues:
+          reqDistribution = 'continous'
+          print('Jia JIAJIAJIAJIA',tag,prefix,reqDistribution)
+        else:
+          reqDistribution = child.parameterValues['distribution'].lower()
+          print('ZHOUZHOU JIAJIAJIAJIA',tag,prefix,reqDistribution)
+          if reqDistribution not in ['continous','discrete']:
+            self.raiseAWarning('Unrecognized distribution type for metric median, use continous instead')
+            reqDistribution = 'continous'
+        self.toDo[tag].append({'targets':set(targets),
+                               'prefix':prefix,
+                               'reqDistribution':reqDistribution})      
       elif tag in self.scalarVals:
         if tag not in self.toDo.keys():
           self.toDo[tag] = [] # list of {'targets':(), 'prefix':str}
@@ -1149,6 +1183,7 @@ class BasicStatistics(PostProcessor):
                 metaVar = prefix + '_ste_' + target
                 outputDict[metaVar] = np.atleast_1d(outputSet[steMetric].sel(**{'targets':target}))
             elif metric == 'percentile':
+              print('metric, requestList,target, targetDict',metric, requestList,target, targetDict)
               for percent in targetDict['strPercent']:
                 varName = '_'.join([prefix,percent,target])
                 percentVal = float(percent)/100.
