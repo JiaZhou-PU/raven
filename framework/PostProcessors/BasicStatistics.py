@@ -322,15 +322,12 @@ class BasicStatistics(PostProcessor):
           reqPercent = [0.05, 0.95]
           strPercent = ['5','95']
         else:
-          reqPercent = set(utils.floatConversion(percent)/100. for percent in child.parameterValues['percent'])
+          reqPercent = list(set(utils.floatConversion(percent)/100. for percent in child.parameterValues['percent']))
           strPercent = set(percent for percent in child.parameterValues['percent'])
-          print('lalalalala')
         if 'distribution' not in child.parameterValues:
           reqDistribution = 'continous'
-          print('Jia JIAJIAJIAJIA',tag,prefix,reqDistribution)
         else:
           reqDistribution = child.parameterValues['distribution'].lower()
-          print('ZHOUZHOU JIAJIAJIAJIA',tag,prefix,reqDistribution)
           if reqDistribution not in ['continous','discrete']:
             self.raiseAWarning('Unrecognized distribution type for metric percentile, use continous instead')
             reqDistribution = 'continous'
@@ -339,23 +336,21 @@ class BasicStatistics(PostProcessor):
                                'percent':reqPercent,
                                'strPercent':strPercent,
                                'reqDistribution':reqDistribution})
-        print(self.toDo)
-      if tag == 'median':
+      elif tag == 'median':
         #get targets
         targets = set(child.value)
         if tag not in self.toDo.keys():
           self.toDo[tag] = [] 
         if 'distribution' not in child.parameterValues:
           reqDistribution = 'continous'
-          print('Jia JIAJIAJIAJIA',tag,prefix,reqDistribution)
         else:
           reqDistribution = child.parameterValues['distribution'].lower()
-          print('ZHOUZHOU JIAJIAJIAJIA',tag,prefix,reqDistribution)
           if reqDistribution not in ['continous','discrete']:
             self.raiseAWarning('Unrecognized distribution type for metric median, use continous instead')
             reqDistribution = 'continous'
         self.toDo[tag].append({'targets':set(targets),
                                'prefix':prefix,
+                               'percent':[0.5],
                                'reqDistribution':reqDistribution})      
       elif tag in self.scalarVals:
         if tag not in self.toDo.keys():
@@ -594,12 +589,13 @@ class BasicStatistics(PostProcessor):
     """
     return np.sqrt(variance)
 
-  def _computeWeightedPercentile(self,arrayIn,pbWeight,percent=0.5):
+  def _computeWeightedPercentile(self,arrayIn,pbWeight,percent=0.5,interpolation=True):
     """
       Method to compute the weighted percentile in a array of data
       @ In, arrayIn, list/numpy.array, the array of values from which the percentile needs to be estimated
       @ In, pbWeight, list/numpy.array, the reliability weights that correspond to the values in 'array'
       @ In, percent, float, the percentile that needs to be computed (between 0.01 and 1.0)
+      @ In, interpolation, bool, whether to use interpolation method when the desired percentile lies between two data points, if True choose the mid point
       @ Out, result, float, the percentile
     """
 
@@ -614,11 +610,14 @@ class BasicStatistics(PostProcessor):
     indexL = utils.first(np.asarray(weightsCDF >= percent).nonzero())[0]
     # This step returns the indices (list of index) of the array which is > than the percentile
     indexH = utils.first(np.asarray(weightsCDF > percent).nonzero())
-    try:
-      # if the indices exists that means the desired percentile lies between two data points
-      # with index as indexL and indexH[0]. Calculate the midpoint of these two points
-      result = 0.5*(sortedWeightsAndPoints[indexL,1]+sortedWeightsAndPoints[indexH[0],1])
-    except IndexError:
+    if interpolation:
+      try:
+        # if the indices exists that means the desired percentile lies between two data points
+        # with index as indexL and indexH[0]. Calculate the midpoint of these two points
+        result = 0.5*(sortedWeightsAndPoints[indexL,1]+sortedWeightsAndPoints[indexH[0],1])
+      except IndexError:
+        result = sortedWeightsAndPoints[indexL,1]
+    else:
       result = sortedWeightsAndPoints[indexL,1]
     return result
 
@@ -634,7 +633,8 @@ class BasicStatistics(PostProcessor):
     #storage dictionary for skipped metrics
     self.skipped = {}
     #construct a dict of required computations
-    needed = dict((metric,{'targets':set(),'percent':set()}) for metric in self.scalarVals)
+    needed = dict((metric,{'targets':set()}) for metric in self.scalarVals)
+    needed.update(dict((metric,{'targets':set(),'percent':set(),'reqDistribution':{}}) for metric in ['median','percentile']))
     needed.update(dict((metric,{'targets':set(),'features':set()}) for metric in self.vectorVals))
     for metric, params in self.toDo.items():
       if metric in self.scalarVals + self.vectorVals:
@@ -648,6 +648,18 @@ class BasicStatistics(PostProcessor):
             needed[metric]['percent'].update(entry['percent'])
           except KeyError:
             pass
+          if 'reqDistribution' in entry.keys():
+            reqDistribution = entry['reqDistribution']
+            pct = entry['percent']
+            for target in entry['targets']:
+              if target in needed[metric]['reqDistribution'].keys():
+                if reqDistribution in needed[metric]['reqDistribution'][target].keys():
+                  needed[metric]['reqDistribution'][target][reqDistribution].extend(pct)
+                else:
+                  needed[metric]['reqDistribution'][target][reqDistribution] = pct
+              else:
+                needed[metric]['reqDistribution'][target] = {}
+                needed[metric]['reqDistribution'][target][reqDistribution] = pct
     # variable                     | needs                  | needed for
     # --------------------------------------------------------------------
     # skewness needs               | expectedValue,variance |
@@ -802,23 +814,48 @@ class BasicStatistics(PostProcessor):
       self.raiseADebug('Starting "'+metric+'"...')
       dataSet = inputDataset[list(needed[metric]['targets'])]
       if self.pbPresent:
+        contSet = xr.Dataset()
+        discSet = xr.Dataset()
         medianSet = xr.Dataset()
         relWeight = pbWeights[list(needed[metric]['targets'])]
-        for target in needed[metric]['targets']:
-          targWeight = relWeight[target].values
-          targDa = dataSet[target]
-          if self.pivotParameter in targDa.sizes.keys():
-            quantile = [self._computeWeightedPercentile(group.values,targWeight,percent=0.5) for label,group in targDa.groupby(self.pivotParameter)]
-          else:
-            quantile = self._computeWeightedPercentile(targDa.values,targWeight,percent=0.5)
-          if self.pivotParameter in targDa.sizes.keys():
-            da = xr.DataArray(quantile,dims=(self.pivotParameter),coords={self.pivotParameter:self.pivotValue})
-          else:
-            da = xr.DataArray(quantile)
-          medianSet[target] = da
+        for entry in self.toDo[metric]:
+          if entry['reqDistribution'] == 'continous':
+            contTargets = entry['targets']
+            for target in contTargets:
+              targWeight = relWeight[target].values
+              targDa = dataSet[target]
+              if self.pivotParameter in targDa.sizes.keys():
+                quantile = [self._computeWeightedPercentile(group.values,targWeight,percent=0.5,interpolation=True) for label,group in targDa.groupby(self.pivotParameter)]
+              else:
+                quantile = self._computeWeightedPercentile(targDa.values,targWeight,percent=0.5,interpolation=True)
+              if self.pivotParameter in targDa.sizes.keys():
+                da = xr.DataArray(quantile,dims=(self.pivotParameter),coords={self.pivotParameter:self.pivotValue})
+              else:
+                da = xr.DataArray(quantile)
+              contSet[target] = da
+            contSet = contSet.assign_coords(reqDistribution ='continous')
+            contSet = contSet.expand_dims('reqDistribution')  
+          elif entry['reqDistribution'] == 'discrete':
+            discTargets = entry['targets']
+            for target in discTargets:
+              targWeight = relWeight[target].values
+              targDa = dataSet[target]
+              if self.pivotParameter in targDa.sizes.keys():
+                quantile = [self._computeWeightedPercentile(group.values,targWeight,percent=0.5,interpolation=False) for label,group in targDa.groupby(self.pivotParameter)]
+              else:
+                quantile = self._computeWeightedPercentile(targDa.values,targWeight,percent=0.5,interpolation=False)
+              if self.pivotParameter in targDa.sizes.keys():
+                da = xr.DataArray(quantile,dims=(self.pivotParameter),coords={self.pivotParameter:self.pivotValue})
+              else:
+                da = xr.DataArray(quantile)
+              discSet[target] = da
+            discSet = discSet.assign_coords(reqDistribution ='discrete')
+            discSet = discSet.expand_dims('reqDistribution') 
+
+        medianSet = xr.merge([contSet,discSet])
       else:
         medianSet = dataSet.median(dim=self.sampleTag)
-      self.calculations[metric] = medianSet
+      self.calculations[metric] = contSet
       calculations[metric] = medianSet
     #
     # lowerPartialVariance
@@ -959,23 +996,57 @@ class BasicStatistics(PostProcessor):
       dataSet = inputDataset[list(needed[metric]['targets'])]
       percent = list(needed[metric]['percent'])
       if self.pbPresent:
+        contSet = xr.Dataset()
+        discSet = xr.Dataset()
         percentileSet = xr.Dataset()
         relWeight = pbWeights[list(needed[metric]['targets'])]
-        for target in needed[metric]['targets']:
-          targWeight = relWeight[target].values
-          targDa = dataSet[target]
-          quantile = []
-          for pct in percent:
-            if self.pivotParameter in targDa.sizes.keys():
-              qtl = [self._computeWeightedPercentile(group.values,targWeight,percent=pct) for label,group in targDa.groupby(self.pivotParameter)]
-            else:
-              qtl = self._computeWeightedPercentile(targDa.values,targWeight,percent=pct)
-            quantile.append(qtl)
-          if self.pivotParameter in targDa.sizes.keys():
-            da = xr.DataArray(quantile,dims=('percent',self.pivotParameter),coords={'percent':percent,self.pivotParameter:self.pivotValue})
-          else:
-            da = xr.DataArray(quantile,dims=('percent'),coords={'percent':percent})
-          percentileSet[target] = da
+        for entry in self.toDo[metric]:
+          if entry['reqDistribution'] == 'continous':
+            contTargets = entry['targets']
+            for target in contTargets:
+              targWeight = relWeight[target].values
+              targDa = dataSet[target]
+              quantile = []
+              # percent = entry['percent']
+              for pct in percent:
+                if self.pivotParameter in targDa.sizes.keys():
+                  qtl = [self._computeWeightedPercentile(group.values,targWeight,percent=pct,interpolation=True) for label,group in targDa.groupby(self.pivotParameter)]
+                else:
+                  qtl = self._computeWeightedPercentile(targDa.values,targWeight,percent=pct,interpolation=True)
+                quantile.append(qtl)
+              if self.pivotParameter in targDa.sizes.keys():
+                da = xr.DataArray(quantile,dims=('percent',self.pivotParameter),coords={'percent':percent,self.pivotParameter:self.pivotValue})
+              else:
+                da = xr.DataArray(quantile,dims=('percent'),coords={'percent':percent})
+              contSet[target] = da
+            try:
+              contSet = contSet.assign_coords(reqDistribution ='continous')
+              contSet = contSet.expand_dims('reqDistribution')
+            except ValueError:
+              pass  
+          elif entry['reqDistribution'] == 'discrete':
+            discTargets = entry['targets']
+            for target in discTargets:
+              targWeight = relWeight[target].values
+              targDa = dataSet[target]
+              quantile = []
+              for pct in percent:
+                if self.pivotParameter in targDa.sizes.keys():
+                  qtl = [self._computeWeightedPercentile(group.values,targWeight,percent=pct,interpolation=False) for label,group in targDa.groupby(self.pivotParameter)]
+                else:
+                  qtl = self._computeWeightedPercentile(targDa.values,targWeight,percent=pct,interpolation=False)
+                quantile.append(qtl)
+              if self.pivotParameter in targDa.sizes.keys():
+                da = xr.DataArray(quantile,dims=('percent',self.pivotParameter),coords={'percent':percent,self.pivotParameter:self.pivotValue})
+              else:
+                da = xr.DataArray(quantile,dims=('percent'),coords={'percent':percent})
+              discSet[target] = da
+            try:
+              discSet = discSet.assign_coords(reqDistribution ='discrete')
+              discSet = discSet.expand_dims('reqDistribution') 
+            except ValueError:
+              pass
+        percentileSet = xr.merge([contSet,discSet])
 
         # TODO: remove when complete
         # interpolation: {'linear', 'lower', 'higher','midpoint','nearest'}, do not try to use 'linear' or 'midpoint'
@@ -1175,19 +1246,24 @@ class BasicStatistics(PostProcessor):
         for targetDict in requestList:
           prefix = targetDict['prefix'].strip()
           for target in targetDict['targets']:
-            if metric in self.scalarVals and metric != 'percentile':
+            if metric in self.scalarVals and metric not in ['percentile','median']:
               varName = prefix + '_' + target
               outputDict[varName] = np.atleast_1d(outputSet[metric].sel(**{'targets':target}))
               steMetric = metric + '_ste'
               if steMetric in self.steVals:
                 metaVar = prefix + '_ste_' + target
                 outputDict[metaVar] = np.atleast_1d(outputSet[steMetric].sel(**{'targets':target}))
+            elif metric == 'median':
+              varName = prefix + '_' + target
+              outputDict[varName] = np.atleast_1d(outputSet[metric].sel(**{'targets':target,'reqDistribution':targetDict['reqDistribution']}))
+              steMetric = metric + '_ste'
+              metaVar = prefix + '_ste_' + target
+              outputDict[metaVar] = np.atleast_1d(outputSet[steMetric].sel(**{'targets':target}))                              
             elif metric == 'percentile':
-              print('metric, requestList,target, targetDict',metric, requestList,target, targetDict)
               for percent in targetDict['strPercent']:
                 varName = '_'.join([prefix,percent,target])
                 percentVal = float(percent)/100.
-                outputDict[varName] = np.atleast_1d(outputSet[metric].sel(**{'targets':target,'percent':percentVal}))
+                outputDict[varName] = np.atleast_1d(outputSet[metric].sel(**{'targets':target,'percent':percentVal,'reqDistribution':targetDict['reqDistribution']}))
             else:
               #check if it was skipped for some reason
               skip = self.skipped.get(metric, None)
