@@ -213,7 +213,7 @@ class EconomicRatio(BasicStatistics):
           self.toDo['expectedValue'].append({'targets':set(child.value),
                             'prefix':'BSMean'})
           self.toDo['median'].append({'targets':set(child.value),
-                            'prefix':'BSMED','percent':[0.5],'reqDistribution':reqDistribution})
+                            'prefix':'BSMED','percent':[0.5],'reqDistribution':'continous'})
           self.toDo[tag].append({'targets':set(targets),
                                 'prefix':prefix,
                                 'threshold':threshold})
