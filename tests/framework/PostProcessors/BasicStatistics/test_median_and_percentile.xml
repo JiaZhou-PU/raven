@@ -27,8 +27,10 @@
     <Dummy name="MyDummy" subType=""/>
     <PostProcessor name="median" subType="BasicStatistics" verbosity="debug">
       <median prefix="median">x0,y0,z0,x01,y01,z02,x,y,z</median>
-      <percentile prefix="percentile" distribution = 'discretes'>x0,z02</percentile>
+      <median prefix="median1" distribution = 'discrete'>z01,z02</median>
+      <percentile prefix="percentile" distribution = 'discrete'>x0,z02</percentile>
       <percentile prefix="percentile2" percent='40'>x0</percentile>
+      <percentile prefix="percentile3" distribution = 'discrete' percent='60'>x0</percentile>
     </PostProcessor>
   </Models>
 
@@ -103,7 +105,8 @@
         percentile_95_x0,
         percentile_5_z02,
         percentile_95_z02,
-        percentile2_40_x0
+        percentile2_40_x0,
+        percentile3_60_x0
       </Output>
     </PointSet>
   </DataObjects>
@@ -116,6 +119,8 @@
                  median_y01,
                  median_z02,
                  median_x,
-                 median_z</Group>
+                 median_z,
+                 median1_z02,
+                 median1_z01</Group>
   </VariableGroups>
 </Simulation>
