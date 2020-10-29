@@ -607,17 +607,21 @@ class BasicStatistics(PostProcessor):
     weightsCDF             = np.cumsum(sortedWeightsAndPoints[:,0])
     # This step returns the index of the array which is < than the percentile, because
     # the insertion create another entry, this index should shift to the bigger side
-    indexL = utils.first(np.asarray(weightsCDF >= percent).nonzero())[0]
+    tol = 1E-10
+    indexL = utils.first(np.asarray(weightsCDF >= percent-tol ).nonzero())[0]
     # This step returns the indices (list of index) of the array which is > than the percentile
-    indexH = utils.first(np.asarray(weightsCDF > percent).nonzero())
+    indexH = utils.first(np.asarray(weightsCDF > percent+tol).nonzero())
+    
+    # print('np.asarray(weightsCDF dayu percent',np.asarray(weightsCDF +tol > percent))
+    # print('np.asarray(weightsCDF xiao percent',np.asarray(weightsCDF -tol< percent))
     if interpolation:
-      print('interpolation')
-      print(sortedWeightsAndPoints)
-      print('weightsCDF',weightsCDF)
-      print('percent,weightsCDF[6]',percent,weightsCDF[6])
-      print(mathUtils.compareFloats(percent,weightsCDF[6]))
-      print('weightsCDF[6] ==percent', weightsCDF[6] == percent)
-      print('percent-weightsCDF[6]',percent-weightsCDF[6])
+      # print('interpolation,indexl',indexL)
+      # print(sortedWeightsAndPoints)
+      # print('weightsCDF',weightsCDF)
+      # print('percent,weightsCDF[6]',percent,weightsCDF[6])
+      # print(mathUtils.compareFloats(percent,weightsCDF[6]))
+      # print('weightsCDF[6] ==percent', weightsCDF[6] == percent)
+      # print('percent-weightsCDF[6]',percent-weightsCDF[6])
 
       try:
         # if the indices exists that means the desired percentile lies between two data points
@@ -828,18 +832,14 @@ class BasicStatistics(PostProcessor):
         relWeight = pbWeights[list(needed[metric]['targets'])]
         for entry in self.toDo[metric]:
           if entry['reqDistribution'] == 'continous':
-            print('jialock2',entry['targets'])
-
             contTargets = entry['targets']
             for target in contTargets:
-              print(target)
               targWeight = relWeight[target].values
               targDa = dataSet[target]
               if self.pivotParameter in targDa.sizes.keys():
                 quantile = [self._computeWeightedPercentile(group.values,targWeight,percent=0.5,interpolation=True) for label,group in targDa.groupby(self.pivotParameter)]
               else:
                 quantile = self._computeWeightedPercentile(targDa.values,targWeight,percent=0.5,interpolation=True)
-              print(quantile)
               if self.pivotParameter in targDa.sizes.keys():
                 da = xr.DataArray(quantile,dims=(self.pivotParameter),coords={self.pivotParameter:self.pivotValue})
               else:
@@ -848,17 +848,14 @@ class BasicStatistics(PostProcessor):
             contSet = contSet.assign_coords(reqDistribution ='continous')
             contSet = contSet.expand_dims('reqDistribution')  
           elif entry['reqDistribution'] == 'discrete':
-            print('jialock',entry['targets'])
             discTargets = entry['targets']
             for target in discTargets:
-              print(target)
               targWeight = relWeight[target].values
               targDa = dataSet[target]
               if self.pivotParameter in targDa.sizes.keys():
                 quantile = [self._computeWeightedPercentile(group.values,targWeight,percent=0.5,interpolation=False) for label,group in targDa.groupby(self.pivotParameter)]
               else:
                 quantile = self._computeWeightedPercentile(targDa.values,targWeight,percent=0.5,interpolation=False)
-              print(quantile)
               if self.pivotParameter in targDa.sizes.keys():
                 da = xr.DataArray(quantile,dims=(self.pivotParameter),coords={self.pivotParameter:self.pivotValue})
               else:
@@ -866,7 +863,6 @@ class BasicStatistics(PostProcessor):
               discSet[target] = da
             discSet = discSet.assign_coords(reqDistribution ='discrete')
             discSet = discSet.expand_dims('reqDistribution') 
-
         medianSet = xr.merge([contSet,discSet])
       else:
         medianSet = dataSet.median(dim=self.sampleTag)
@@ -1010,30 +1006,41 @@ class BasicStatistics(PostProcessor):
       self.raiseADebug('Starting "'+metric+'"...')
       dataSet = inputDataset[list(needed[metric]['targets'])]
       percent = list(needed[metric]['percent'])
+      print(list(needed[metric]['targets']))
+      print(percent)
+
       if self.pbPresent:
         contSet = xr.Dataset()
         discSet = xr.Dataset()
         percentileSet = xr.Dataset()
         relWeight = pbWeights[list(needed[metric]['targets'])]
+        print(self.toDo[metric])
         for entry in self.toDo[metric]:
           if entry['reqDistribution'] == 'continous':
             contTargets = entry['targets']
+            print('contTargets',contTargets)
             for target in contTargets:
-              targWeight = relWeight[target].values
-              targDa = dataSet[target]
-              quantile = []
-              # percent = entry['percent']
-              for pct in percent:
+              if target not in contSet:
+
+                targWeight = relWeight[target].values
+                targDa = dataSet[target]
+                quantile = []
+                # percent = entry['percent']
+
+                for pct in percent:
+                  if self.pivotParameter in targDa.sizes.keys():
+                    qtl = [self._computeWeightedPercentile(group.values,targWeight,percent=pct,interpolation=True) for label,group in targDa.groupby(self.pivotParameter)]
+                  else:
+                    qtl = self._computeWeightedPercentile(targDa.values,targWeight,percent=pct,interpolation=True)
+                  quantile.append(qtl)
                 if self.pivotParameter in targDa.sizes.keys():
-                  qtl = [self._computeWeightedPercentile(group.values,targWeight,percent=pct,interpolation=True) for label,group in targDa.groupby(self.pivotParameter)]
+                  da = xr.DataArray(quantile,dims=('percent',self.pivotParameter),coords={'percent':percent,self.pivotParameter:self.pivotValue})
                 else:
-                  qtl = self._computeWeightedPercentile(targDa.values,targWeight,percent=pct,interpolation=True)
-                quantile.append(qtl)
-              if self.pivotParameter in targDa.sizes.keys():
-                da = xr.DataArray(quantile,dims=('percent',self.pivotParameter),coords={'percent':percent,self.pivotParameter:self.pivotValue})
-              else:
-                da = xr.DataArray(quantile,dims=('percent'),coords={'percent':percent})
-              contSet[target] = da
+                  print('continueelse')
+                  print(target,quantile)
+                  da = xr.DataArray(quantile,dims=('percent'),coords={'percent':percent,'reqDistribution':'continous'})
+                  print('contSetbfzj',target in contSet)
+                contSet[target] = da
             try:
               contSet = contSet.assign_coords(reqDistribution ='continous')
               contSet = contSet.expand_dims('reqDistribution')
@@ -1041,28 +1048,40 @@ class BasicStatistics(PostProcessor):
               pass  
           elif entry['reqDistribution'] == 'discrete':
             discTargets = entry['targets']
+            print('discTargets',discTargets)
             for target in discTargets:
-              targWeight = relWeight[target].values
-              targDa = dataSet[target]
-              quantile = []
-              for pct in percent:
+              if target not in discSet:
+                targWeight = relWeight[target].values
+                targDa = dataSet[target]
+                quantile = []
+                for pct in percent:
+                  if self.pivotParameter in targDa.sizes.keys():
+                    qtl = [self._computeWeightedPercentile(group.values,targWeight,percent=pct,interpolation=False) for label,group in targDa.groupby(self.pivotParameter)]
+                  else:
+                    qtl = self._computeWeightedPercentile(targDa.values,targWeight,percent=pct,interpolation=False)
+                  quantile.append(qtl)
                 if self.pivotParameter in targDa.sizes.keys():
-                  qtl = [self._computeWeightedPercentile(group.values,targWeight,percent=pct,interpolation=False) for label,group in targDa.groupby(self.pivotParameter)]
+                  da = xr.DataArray(quantile,dims=('percent',self.pivotParameter),coords={'percent':percent,self.pivotParameter:self.pivotValue})
                 else:
-                  qtl = self._computeWeightedPercentile(targDa.values,targWeight,percent=pct,interpolation=False)
-                quantile.append(qtl)
-              if self.pivotParameter in targDa.sizes.keys():
-                da = xr.DataArray(quantile,dims=('percent',self.pivotParameter),coords={'percent':percent,self.pivotParameter:self.pivotValue})
-              else:
-                da = xr.DataArray(quantile,dims=('percent'),coords={'percent':percent})
-              discSet[target] = da
+                  print('discreteelse')
+                  print(target,quantile)
+                  da = xr.DataArray(quantile,dims=('percent'),coords={'percent':percent})
+                  print('discSetbfzj',target in discSet)
+
+                discSet[target] = da
             try:
               discSet = discSet.assign_coords(reqDistribution ='discrete')
               discSet = discSet.expand_dims('reqDistribution') 
             except ValueError:
               pass
+        print('contSet',contSet)
+        print('discSet',discSet)
+        # percentileSet = xr.merge([contSet,discSet])
+        # print('conc',xr.concat([contSet,discSet], dim=["percent", "reqDistribution"]))
+        # print('merge',xr.merge([contSet,discSet],compat="no_conflicts"))
+        # print('neste',xr.combine_nested([contSet,discSet], concat_dim=["percent", "reqDistribution"]))
+        # print('update',xr.update([contSet,discSet]))
         percentileSet = xr.merge([contSet,discSet])
-
         # TODO: remove when complete
         # interpolation: {'linear', 'lower', 'higher','midpoint','nearest'}, do not try to use 'linear' or 'midpoint'
         # The xarray.Dataset.where() will not return the corrrect solution
