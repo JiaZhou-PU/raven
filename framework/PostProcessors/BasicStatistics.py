@@ -611,6 +611,14 @@ class BasicStatistics(PostProcessor):
     # This step returns the indices (list of index) of the array which is > than the percentile
     indexH = utils.first(np.asarray(weightsCDF > percent).nonzero())
     if interpolation:
+      print('interpolation')
+      print(sortedWeightsAndPoints)
+      print('weightsCDF',weightsCDF)
+      print('percent,weightsCDF[6]',percent,weightsCDF[6])
+      print(mathUtils.compareFloats(percent,weightsCDF[6]))
+      print('weightsCDF[6] ==percent', weightsCDF[6] == percent)
+      print('percent-weightsCDF[6]',percent-weightsCDF[6])
+
       try:
         # if the indices exists that means the desired percentile lies between two data points
         # with index as indexL and indexH[0]. Calculate the midpoint of these two points
@@ -820,14 +828,18 @@ class BasicStatistics(PostProcessor):
         relWeight = pbWeights[list(needed[metric]['targets'])]
         for entry in self.toDo[metric]:
           if entry['reqDistribution'] == 'continous':
+            print('jialock2',entry['targets'])
+
             contTargets = entry['targets']
             for target in contTargets:
+              print(target)
               targWeight = relWeight[target].values
               targDa = dataSet[target]
               if self.pivotParameter in targDa.sizes.keys():
                 quantile = [self._computeWeightedPercentile(group.values,targWeight,percent=0.5,interpolation=True) for label,group in targDa.groupby(self.pivotParameter)]
               else:
                 quantile = self._computeWeightedPercentile(targDa.values,targWeight,percent=0.5,interpolation=True)
+              print(quantile)
               if self.pivotParameter in targDa.sizes.keys():
                 da = xr.DataArray(quantile,dims=(self.pivotParameter),coords={self.pivotParameter:self.pivotValue})
               else:
@@ -836,14 +848,17 @@ class BasicStatistics(PostProcessor):
             contSet = contSet.assign_coords(reqDistribution ='continous')
             contSet = contSet.expand_dims('reqDistribution')  
           elif entry['reqDistribution'] == 'discrete':
+            print('jialock',entry['targets'])
             discTargets = entry['targets']
             for target in discTargets:
+              print(target)
               targWeight = relWeight[target].values
               targDa = dataSet[target]
               if self.pivotParameter in targDa.sizes.keys():
                 quantile = [self._computeWeightedPercentile(group.values,targWeight,percent=0.5,interpolation=False) for label,group in targDa.groupby(self.pivotParameter)]
               else:
                 quantile = self._computeWeightedPercentile(targDa.values,targWeight,percent=0.5,interpolation=False)
+              print(quantile)
               if self.pivotParameter in targDa.sizes.keys():
                 da = xr.DataArray(quantile,dims=(self.pivotParameter),coords={self.pivotParameter:self.pivotValue})
               else:
